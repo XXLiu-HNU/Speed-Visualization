@@ -42,13 +42,13 @@ def create_gauge(current_speed, max_speed=100, avg_speed=50, save_path="rotated_
     ax.set_yticklabels([])  # 隐藏y轴刻度标签
 
     # 仪表盘的渐变颜色绘制
-    theta = np.linspace(-np.pi/6, np.pi + np.pi/6, 500)  # 从 0 到 π
+    theta = np.linspace(-np.pi/6, np.pi + np.pi/6, 500)  # 从 -π/6 到 π + π/6
     norm_speed = current_speed / max_speed
     colors = cmap(np.linspace(0, 1, len(theta)))
     for i in range(len(theta) - 1):
         ax.fill_between(
             [theta[i], theta[i + 1]], 
-            0.7, 1, 
+            0.8, 1, 
             color=colors[i],
             alpha=0.8 if i / len(theta) <= norm_speed else 0
         )
@@ -56,21 +56,23 @@ def create_gauge(current_speed, max_speed=100, avg_speed=50, save_path="rotated_
     for i in range(len(theta) - 1):
         ax.fill_between(
             [theta[i], theta[i + 1]], 
-            1.08, 1.15, 
+            1.08, 1.2, 
             color="lightblue"
         )
 
     # 绘制刻度弧
     for i, angle in enumerate(np.linspace(-np.pi/6, np.pi + np.pi/6, 11)):
-        radius = 1.15
-        ax.plot([angle, angle], [radius - 0.08, radius], color="white", lw=2)  # 刻度线
-        if i % 2 == 0:  # 每隔一个刻度显示文本
-            speed_label = int(i * max_speed / 10)
-            ax.text(angle, radius + 0.05, f"{speed_label}", color="blue", fontsize=14, ha="center", va="center")
+        radius = 1.2
+        ax.plot([angle, angle], [radius - 0.1, radius], color="white", lw=2)  # 刻度线
+       
+        speed_label = int(i * max_speed / 10)
+        ax.text(angle, radius + 0.1, f"{speed_label}", color="white", fontsize=14, ha="center", va="center")
 
     # 绘制指针
     pointer_angle = -np.pi/6 + norm_speed * (np.pi+np.pi/3)
-    ax.plot([pointer_angle, pointer_angle], [0.65, 1], color="cyan", lw=4, label="Current Speed")
+    i = np.abs(theta - pointer_angle).argmin()
+    
+    ax.plot([pointer_angle, pointer_angle], [0.8, 1.25], color=colors[i], lw=3, label="Current Speed")
 
     # Max Speed 放在右上方
     ax.text(
