@@ -4,6 +4,7 @@ from nav_msgs.msg import Odometry
 import csv
 import os
 import time
+import math
 
 class OdomRecorder:
     def __init__(self):
@@ -11,7 +12,7 @@ class OdomRecorder:
         
         # 参数配置
         self.csv_path = rospy.get_param('~csv_path', 'odom_data.csv')
-        self.odom_topic = rospy.get_param('~odom_topic', '/odom')
+        self.odom_topic = rospy.get_param('~odom_topic', '/iris_0/mavros/vision_odom/odom')
         
         # 初始化CSV文件
         self.init_csv()
@@ -22,43 +23,40 @@ class OdomRecorder:
         rospy.loginfo(f"开始录制Odometry数据到 {self.csv_path}...")
 
     def init_csv(self):
-        file_exists = os.path.isfile(self.csv_path)
-        self.csv_file = open(self.csv_path, 'a')
+        # 始终以写入模式打开，覆盖旧文件
+        self.csv_file = open(self.csv_path, 'w')  # 修改为'w'模式
         self.writer = csv.writer(self.csv_file)
         
-        if not file_exists:
-            header = [
-                'timestamp', 
-                'pos_x', 'pos_y', 'pos_z',
-                'vel_x', 'vel_y', 'vel_z',
-                'angular_vel_x', 'angular_vel_y', 'angular_vel_z',
-                'vel_x_kmh'
-            ]
-            self.writer.writerow(header)
-            self.csv_file.flush()
+        # 始终写入表头（覆盖模式不需要检查文件存在性）
+        header = [
+            'timestamp', 'speed_magnitude'  # 保持与之前的列名一致
+        ]
+        self.writer.writerow(header)
+        self.csv_file.flush()
+        rospy.loginfo(f"已创建新数据文件: {self.csv_path}")
 
     def odom_callback(self, msg):
         try:
             # 提取位置信息
-            position = msg.pose.pose.position
+
             
-            # 提取线速度和角速度（m/s）
+            # 提取线速度和角速度（保持m/s单位）
             linear_vel = msg.twist.twist.linear
-            angular_vel = msg.twist.twist.angular
+ 
             
-            # 转换线速度为km/h
-            vel_x_kmh = linear_vel.x * 3.6  # m/s -> km/h
+            # 计算三轴速度矢量模（m/s）
+            speed_magnitude = math.sqrt(
+                linear_vel.x**2 + 
+                linear_vel.y**2 + 
+                linear_vel.z**2
+            )
             
             # 获取时间戳
             timestamp = msg.header.stamp.to_sec()
             
             # 写入CSV
             row = [
-                timestamp,
-                position.x, position.y, position.z,
-                linear_vel.x, linear_vel.y, linear_vel.z,
-                angular_vel.x, angular_vel.y, angular_vel.z,
-                vel_x_kmh
+                timestamp,speed_magnitude  # 写入速度矢量模
             ]
             self.writer.writerow(row)
             self.csv_file.flush()

@@ -4,6 +4,8 @@ from matplotlib.colors import LinearSegmentedColormap
 import os
 from tqdm import tqdm
 import cv2
+import rospy
+import csv
 
 # 仪表盘绘制函数
 def create_gauge(current_speed, max_speed=100, avg_speed=50, save_path="rotated_gauge.png"):
@@ -65,8 +67,13 @@ def create_gauge(current_speed, max_speed=100, avg_speed=50, save_path="rotated_
         radius = 1.2
         ax.plot([angle, angle], [radius - 0.1, radius], color="white", lw=2)  # 刻度线
        
-        speed_label = int(i * max_speed / 10)
-        ax.text(angle, radius + 0.1, f"{speed_label}", color="white", fontsize=14, ha="center", va="center")
+        speed_label = round(i * max_speed / 10, 1)
+        ax.text(angle, radius + 0.2, 
+            f"{speed_label:.1f}",  # 强制显示一位小数格式
+            color="white", 
+            fontsize=16, 
+            ha="center", 
+            va="center")
 
     # 绘制指针
     pointer_angle = -np.pi/6 + norm_speed * (np.pi+np.pi/3)
@@ -77,7 +84,7 @@ def create_gauge(current_speed, max_speed=100, avg_speed=50, save_path="rotated_
     # Max Speed 放在右上方
     ax.text(
         -np.pi/2, 0.1,  # 角度π（右侧），半径1.4
-        f"Max Vel(Km/H)", 
+        f"Max Vel(m/s)", 
         color="red", 
         ha='center',   # 右对齐
         va='top',     # 顶部对齐
@@ -98,7 +105,7 @@ def create_gauge(current_speed, max_speed=100, avg_speed=50, save_path="rotated_
     # Current Speed 放在仪表中心下方
     ax.text(
         np.pi/2, 0.30,  # 角度π/2（正上方），半径0.5
-        f"Cur Vel(Km/H)", 
+        f"Cur Vel(m/s)", 
         color="cyan", 
         ha='center', 
         va='center' ,
@@ -130,53 +137,47 @@ def create_gauge(current_speed, max_speed=100, avg_speed=50, save_path="rotated_
     plt.savefig(save_path, transparent=True, dpi=300)
     plt.close()
 
-# 测试数据
-# 生成平滑速度曲线的函数
-def generate_smooth_speed(duration=5, fps=30):
-    """生成包含加速、巡航、减速阶段的平滑速度曲线"""
-    t = np.linspace(0, duration, duration*fps)
-    
-    # 分段函数参数
-    acceleration_duration = duration * 0.4  # 加速阶段30%
-    cruise_duration = duration * 0.3         # 巡航阶段40%
-    deceleration_duration = duration * 0.4   # 减速阶段30%
-    
-    # 加速阶段（0-30%时间）
-    acceleration = np.linspace(0, 80, int(acceleration_duration*fps))
-    
-    # 巡航阶段（30-70%时间）
-    cruise = np.linspace(80, 70, int(cruise_duration*fps))
-    
-    # 减速阶段（70-100%时间）
-    deceleration = np.linspace(70, 90, int(deceleration_duration*fps))
-    
-    # 组合三个阶段
-    speed = np.concatenate([acceleration, cruise, deceleration])
-    
-    # 确保长度匹配
-    if len(speed) < len(t):
-        speed = np.pad(speed, (0, len(t)-len(speed)), mode='edge')
-    else:
-        speed = speed[:len(t)]
-    
-    return t, speed
+# 从CSV读取速度数据
+def read_speed_data(csv_path):
+    speeds = []
+    with open(csv_path, 'r') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            try:
+                # 添加绝对值处理
+                speed = float(row['speed_magnitude'])
+                speeds.append(speed)
+            except KeyError:
+                raise Exception("CSV文件中缺少'speed_magnitude'列, 请确保使用正确版本的odom_recorder")
+            except ValueError as e:
+                print(f"数据格式错误: {e}，跳过无效行")
+    return speeds
 
-# 视频生成函数
-def generate_video(output_path="smooth_speed.mp4", fps=30):
+# 视频生成函数（修改版）
+def generate_video(csv_path, output_path="speed_visualization.mp4", fps=30):
     # 清理并创建临时目录
     os.makedirs("temp_frames", exist_ok=True)
     for f in os.listdir("temp_frames"):
         os.remove(os.path.join("temp_frames", f))
     
-    # 生成平滑数据
-    t, speeds = generate_smooth_speed(fps=fps)
+    # 读取速度数据
+    speeds = read_speed_data(csv_path)
+    
+    if not speeds:
+        raise ValueError("CSV文件中未找到有效速度数据")
+    
+    # 自动计算最大和平均速度
+    max_speed = max(speeds)
+    avg_speed = np.mean(speeds)
+    
+    rospy.loginfo(f"数据统计 - 最大速度: {max_speed:.2f} m/s, 平均速度: {avg_speed:.2f} m/s")
     
     # 生成所有帧（带进度条）
     for i, speed in enumerate(tqdm(speeds, desc="生成仪表盘帧")):
         create_gauge(
             current_speed=speed,
-            max_speed=100,
-            avg_speed=50,
+            max_speed=max_speed * 1.1,  # 留10%余量
+            avg_speed=avg_speed,
             save_path=f"temp_frames/frame_{i:04d}.png"
         )
     
@@ -200,4 +201,15 @@ def generate_video(output_path="smooth_speed.mp4", fps=30):
     print(f"\n视频生成完成: {output_path}")
 
 if __name__ == "__main__":
-    generate_video(fps=30)  # 推荐保持30fps的流畅度
+    import argparse
+    parser = argparse.ArgumentParser(description='生成速度可视化视频')
+    parser.add_argument('--csv', type=str, default='odom_data.csv', help='输入CSV文件路径')
+    parser.add_argument('--output', type=str, default='speed_visualization.mp4', help='输出视频路径')
+    parser.add_argument('--fps', type=int, default=30, help='视频帧率')
+    args = parser.parse_args()
+    
+    generate_video(
+        csv_path=args.csv,
+        output_path=args.output,
+        fps=args.fps
+    )
