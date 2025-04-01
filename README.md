@@ -1,12 +1,42 @@
 # 🚗 Speedometer Visualization Tool
-Dynamically generate speed dashboard animations, support transparent background video export, adapt to video editing software (such as Premiere Pro, Jianying, etc.), add professional speed indication effects for sports scenes, racing games, data visualization, etc.
+
+Dynamically generate speed dashboard animations with transparent background support. Designed for video editing workflows (Premiere Pro, Final Cut Pro, DaVinci Resolve, etc.)
+
+## 🌟 Features
+- 🎨 ​**Style Customization** - Adjust colors, scales and display styles
+- 🚀 ​**ROS Integration** - Directly subscribe to Odometry topics
+- 📊 ​**Data Analysis** - Velocity statistics and trajectory evaluation
+- 🎥 ​**Transparent Video** - Export with alpha channel for compositing
 
 ## 📸 Demo & Results
-![动效演示](misc/smooth_speed.gif)
-## Add in a Video
-Use ffmepg to generate transparent videos in the folder where the generated images are stored, thereby adding speed prompts in video production
 
-`ffmpeg -framerate 30 -i frame_%04d.png -c:v png -pix_fmt rgba output.mov`
+![Dashboard Demo](misc/gazebo.gif)  
+*Gazebo example*
 
-Afterwards, use editing software such as PR and JianYing for video production
-![image](https://github.com/user-attachments/assets/3e2c3286-a12f-4608-b11f-631d4dcd9359)
+
+![Dashboard Demo](misc/smooth_speed.gif)  
+*Real-time Speed Visualization*
+
+
+
+##  🚀 Quick Start
+1. Modify ROS topic in `odom_subscriber.py`:
+
+    ```
+    # Line 15
+    self.odom_topic = rospy.get_param('~odom_topic', '/iris_0/mavros/vision_odom/odom')
+    ```
+2. Record UAV data:
+   
+    `python3 odom_subscriber.py`
+
+3. Generate visualization:
+   
+    `python3 SpeedVisualization.py --csv odom_data.csv --output flight.mp4 --fps 30`
+
+4. Create transparent video:
+   
+   `sh mov_video.sh`
+## 📝 TODO
+
+Add velocity smoothing module
